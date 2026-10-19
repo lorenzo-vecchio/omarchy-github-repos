@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "shdw.github",
+  "name": "GitHub Repos",
+  "version": "0.1.0",
+  "author": "shdw",
+  "license": "MIT",
+  "description": "Browse personal and organization GitHub repositories from the Omarchy bar: clone, open in your agent or editor, see open issues, PRs and check status.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "GitHub Repos",
+    "description": "Repositories from gh with clone, agent and editor actions, open issue and PR counts, last commit age, and CI check status.",
+    "category": "Developer Tools",
+    "aliases": ["github", "git", "repos"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "projectsDir": "~/Projects",
+      "refreshMinutes": 5,
+      "includeForks": true
+    },
+    "schema": [
+      {
+        "key": "projectsDir",
+        "type": "path",
+        "label": "Projects folder",
+        "defaultValue": "~/Projects",
+        "description": "Repositories cloned from this panel land here, and this tree is scanned to tell which ones already exist locally."
+      },
+      {
+        "key": "refreshMinutes",
+        "type": "integer",
+        "label": "Refresh interval (minutes)",
+        "min": 1,
+        "max": 120,
+        "step": 1,
+        "defaultValue": 5,
+        "description": "How often the repository list is re-read from GitHub while the panel is open."
+      },
+      {
+        "key": "includeForks",
+        "type": "boolean",
+        "label": "Show forks",
+        "defaultValue": true
+      }
+    ]
+  }
+}

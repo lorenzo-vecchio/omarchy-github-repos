@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+# gh-repos: JSON snapshot of every GitHub repository the signed-in gh account
+# can see, annotated with local checkout path, open issue/PR counts, the last
+# commit date, and the check status of the default branch HEAD.
+# Read-only: this script never clones or writes anything.
+#
+# Usage: gh-repos [projects-dir]
+#
+# Output shape:
+#   {
+#     "viewer": "login",
+#     "projectsDir": "/home/user/Projects",
+#     "agent": "opencode",      # effective default agent, "" when unset
+#     "editor": "nvim",         # effective default editor
+#     "orgs": ["org-a", "org-b"],
+#     "repos": [
+#       { "name": "...", "nameWithOwner": "owner/name", "owner": "owner",
+#         "ownerType": "User" | "Organization", "private": false, "fork": false,
+#         "description": "", "updatedAt": "...", "localPath": "",
+#         "issues": 0, "prs": 0, "lastCommit": "", "ci": "" }
+#     ],
+#     "warning": "",
+#     "error": ""
+#   }
+set -uo pipefail
+
+projects=${1:-$HOME/Projects}
+projects=${projects/#\~/$HOME}
+
+json_quote() {
+  jq -Rn --arg v "$1" '$v'
+}
+
+json_error() {
+  printf '{"viewer":"","projectsDir":%s,"agent":"","editor":"","orgs":[],"repos":[],"warning":"","error":%s}\n' \
+    "$(json_quote "$projects")" "$(json_quote "$1")"
+  exit 0
+}
+
+command -v gh >/dev/null 2>&1 || json_error "gh (GitHub CLI) is not installed"
+command -v jq >/dev/null 2>&1 || json_error "jq is not installed"
+command -v git >/dev/null 2>&1 || json_error "git is not installed"
+gh auth status >/dev/null 2>&1 || json_error "Not signed in to GitHub. Run: gh auth login"
+
+tmp=$(mktemp -d) || json_error "Could not create a temp directory"
+trap 'rm -rf "$tmp"' EXIT
+
+warning=""
+
+# ---- Default agent / editor (same sources Omarchy itself reads) -------------
+agent=$(head -n1 "$HOME/.config/omarchy/defaults/agent" 2>/dev/null || true)
+editor=$(head -n1 "$HOME/.local/state/omarchy/defaults/editor" 2>/dev/null || true)
+[ -n "$editor" ] || editor=nvim
+command -v "$editor" >/dev/null 2>&1 || editor=nvim
+
+# ---- Repository list (REST: reliably includes organization membership) ------
+if ! gh api "user/repos?per_page=100&sort=updated&affiliation=owner,organization_member" \
+  --paginate >"$tmp/pages.json" 2>"$tmp/gh.err"; then
+  json_error "$(tr '\n' ' ' <"$tmp/gh.err" | head -c 400)"
+fi
+
+if ! jq -s 'add | map({
+      name: .name,
+      nameWithOwner: .full_name,
+      owner: .owner.login,
+      ownerType: .owner.type,
+      private: .private,
+      fork: .fork,
+      description: (.description // ""),
+      updatedAt: .updated_at
+    })' "$tmp/pages.json" >"$tmp/repos.json" 2>/dev/null; then
+  json_error "Could not parse the GitHub response"
+fi
+
+# ---- Per-repository metadata, batched into aliases in one GraphQL query -----
+# REST can list the repositories but costs one request each for issue counts,
+# the HEAD commit, and its checks. GraphQL answers all of them in one call.
+echo '{"data":{}}' >"$tmp/meta.json"
+
+repo_count=$(jq 'length' "$tmp/repos.json")
+batch_size=10
+batch_status=0
+
+if [ "$repo_count" -gt 0 ]; then
+  build_query() {
+    local start=$1 size=$2 out=$3 first=$4
+    {
+      echo 'query {'
+      [ "$first" = "yes" ] && echo '  viewer { login }'
+      jq -r --argjson s "$start" --argjson c "$size" \
+        '.[$s:$s + $c] | to_entries[] |
+         "  r\(.key + $s): repository(owner: \(.value.owner | tojson), name: \(.value.name | tojson)) { ...Meta }"' \
+        "$tmp/repos.json"
+      echo '}'
+      echo 'fragment Meta on Repository {'
+      echo '  issues(states: OPEN) { totalCount }'
+      echo '  pullRequests(states: OPEN) { totalCount }'
+      echo '  defaultBranchRef {'
+      echo '    target {'
+      echo '      ... on Commit {'
+      echo '        committedDate'
+      echo '        statusCheckRollup { state }'
+      echo '      }'
+      echo '    }'
+      echo '  }'
+      echo '}'
+    } >"$out"
+  }
+
+  start=0
+  while [ "$start" -lt "$repo_count" ]; do
+    size=$batch_size
+    [ $((start + size)) -gt "$repo_count" ] && size=$((repo_count - start))
+    first=no
+    [ "$start" -eq 0 ] && first=yes
+    build_query "$start" "$size" "$tmp/meta-$start.graphql" "$first"
+    start=$((start + batch_size))
+  done
+
+  # statusCheckRollup is the expensive part of the query, so one call for every
+  # repository takes several seconds. Ten per request, six requests at a time,
+  # is far faster without approaching GraphQL's node limit.
+  find "$tmp" -maxdepth 1 -name 'meta-*.graphql' -print0 \
+    | xargs -0 -P 6 -n 1 bash -c '
+        if gh api graphql -F query=@"$1" >"$1.json.tmp" 2>"$1.err"; then
+          mv "$1.json.tmp" "$1.json"
+        else
+          echo "{\"data\":{}}" >"$1.json"
+          exit 1
+        fi
+      ' _ || batch_status=1
+
+  if ! jq -s '{ data: (map(.data // {}) | reduce .[] as $d ({}; . * $d)) }' \
+    "$tmp"/meta-*.json >"$tmp/meta.json" 2>/dev/null; then
+    echo '{"data":{}}' >"$tmp/meta.json"
+    batch_status=1
+  fi
+
+  if [ "$batch_status" -ne 0 ]; then
+    warning="Some repository metadata could not be loaded"
+  fi
+fi
+
+viewer=$(jq -r '.data.viewer.login // empty' "$tmp/meta.json" 2>/dev/null || true)
+[ -n "$viewer" ] || viewer=$(gh api user --jq .login 2>/dev/null || true)
+
+# ---- Local side: every .git under Projects, keyed by remote and by name -----
+: >"$tmp/by-remote.tsv"
+: >"$tmp/by-name.tsv"
+
+if [ -d "$projects" ]; then
+  while IFS= read -r -d '' gitpath; do
+    dir=${gitpath%/.git}
+    [ -d "$dir" ] || continue
+
+    base=${dir##*/}
+    printf '%s\t%s\n' "${base,,}" "$dir" >>"$tmp/by-name.tsv"
+
+    url=$(git -C "$dir" config --get remote.origin.url 2>/dev/null) || continue
+    [ -n "$url" ] || continue
+    url=${url%.git}
+
+    case $url in
+      git@github.com:*)       nwo=${url#git@github.com:} ;;
+      ssh://git@github.com/*) nwo=${url#ssh://git@github.com/} ;;
+      https://github.com/*)   nwo=${url#https://github.com/} ;;
+      http://github.com/*)    nwo=${url#http://github.com/} ;;
+      https://*@github.com/*) nwo=${url#*github.com/} ;;
+      *) continue ;;
+    esac
+
+    [ -n "$nwo" ] || continue
+    printf '%s\t%s\n' "${nwo,,}" "$dir" >>"$tmp/by-remote.tsv"
+  done < <(find "$projects" -maxdepth 4 -name .git -print0 2>/dev/null)
+fi
+
+# One path per remote: two checkouts of the same repo collapse to the first.
+sort -u -t $'\t' -k1,1 "$tmp/by-remote.tsv" >"$tmp/remote-uniq.tsv"
+
+# Directory names only match when unambiguous, so a random "api" folder is not
+# reported as the "api" repository of some unrelated owner.
+awk -F'\t' '{ count[$1]++; path[$1] = $2 }
+  END { for (key in count) if (count[key] == 1) print key "\t" path[key] }' \
+  "$tmp/by-name.tsv" | sort >"$tmp/name-uniq.tsv"
+
+# ---- Merge ------------------------------------------------------------------
+jq -n \
+  --slurpfile repos "$tmp/repos.json" \
+  --slurpfile meta "$tmp/meta.json" \
+  --rawfile remote "$tmp/remote-uniq.tsv" \
+  --rawfile names "$tmp/name-uniq.tsv" \
+  --arg viewer "$viewer" \
+  --arg projects "$projects" \
+  --arg agent "$agent" \
+  --arg editor "$editor" \
+  --arg warning "$warning" '
+  def to_map:
+    split("\n")
+    | map(select(length > 0) | split("\t") | { key: .[0], value: .[1] })
+    | from_entries;
+
+  ($remote | to_map) as $byRemote
+  | ($names | to_map) as $byName
+  | ($repos[0] // []) as $list
+  | ($meta[0].data // {}) as $m
+  | {
+      viewer: $viewer,
+      projectsDir: $projects,
+      agent: $agent,
+      editor: $editor,
+      warning: $warning,
+      error: "",
+      orgs: (
+        [$list[] | select(.ownerType == "Organization") | .owner]
+        | unique | sort
+      ),
+      repos: [
+        $list
+        | to_entries[]
+        | .key as $i
+        | .value
+        | . + {
+            localPath: ($byRemote[(.nameWithOwner | ascii_downcase)]
+              // $byName[(.name | ascii_downcase)]
+              // ""),
+            issues: ($m["r\($i)"].issues.totalCount // 0),
+            prs: ($m["r\($i)"].pullRequests.totalCount // 0),
+            lastCommit: ($m["r\($i)"].defaultBranchRef.target.committedDate // ""),
+            ci: ($m["r\($i)"].defaultBranchRef.target.statusCheckRollup.state // "")
+          }
+      ]
+    }'
