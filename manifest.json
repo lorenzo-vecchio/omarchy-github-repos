@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "shdw.github",
+  "id": "lorenzo-vecchio.github",
   "name": "GitHub Repos",
   "version": "0.1.0",
-  "author": "shdw",
+  "author": "lorenzo-vecchio",
   "license": "MIT",
   "description": "Browse personal and organization GitHub repositories from the Omarchy bar: clone, open in your agent or editor, see open issues, PRs and check status.",
   "kinds": [

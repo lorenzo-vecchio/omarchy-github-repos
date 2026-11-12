@@ -1,4 +1,4 @@
-# GitHub Repos (shdw.github)
+# GitHub Repos (lorenzo-vecchio.github)
 
 Omarchy bar widget that browses every GitHub repository the signed-in `gh`
 account can see — personal plus organizations — and acts on them.
@@ -15,19 +15,19 @@ omarchy plugin add https://github.com/lorenzo-vecchio/omarchy-github-repos.git -
 Then add the widget to the bar if it is not placed yet:
 
 ```bash
-omarchy bar put shdw.github --section right
+omarchy bar put lorenzo-vecchio.github --section right
 ```
 
 To update later:
 
 ```bash
-omarchy plugin update shdw.github
+omarchy plugin update lorenzo-vecchio.github
 ```
 
 To remove it:
 
 ```bash
-omarchy plugin remove shdw.github --yes
+omarchy plugin remove lorenzo-vecchio.github --yes
 ```
 
 That disables the widget and deletes the plugin directory. If its entry is
@@ -72,17 +72,17 @@ Stored inline in `~/.config/omarchy/shell.json` on the widget entry:
 | `includeForks` | `true` | Show forks |
 
 ```bash
-omarchy bar set shdw.github projectsDir '~/Code'
-omarchy bar set shdw.github refreshMinutes 15
-omarchy bar move shdw.github --section left
+omarchy bar set lorenzo-vecchio.github projectsDir '~/Code'
+omarchy bar set lorenzo-vecchio.github refreshMinutes 15
+omarchy bar move lorenzo-vecchio.github --section left
 ```
 
 ## IPC
 
 ```bash
-omarchy-shell shdw.github refresh
-omarchy-shell shdw.github clone lorenzo-vecchio/learn-rust
-omarchy-shell shdw.github toggle
+omarchy-shell lorenzo-vecchio.github refresh
+omarchy-shell lorenzo-vecchio.github clone lorenzo-vecchio/learn-rust
+omarchy-shell lorenzo-vecchio.github toggle
 ```
 
 ## Data path

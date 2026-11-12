@@ -14,8 +14,8 @@ import qs.Ui
 // "open in editor"; the rest offer a clone button that puts them there.
 Panel {
   id: root
-  moduleName: "shdw.github"
-  ipcTarget: "shdw.github"
+  moduleName: "lorenzo-vecchio.github"
+  ipcTarget: "lorenzo-vecchio.github"
   manageIpc: false
 
   // ---- Theme handles. Guarded because the bare widget is instantiated
