@@ -24,6 +24,15 @@ To update later:
 omarchy plugin update shdw.github
 ```
 
+To remove it:
+
+```bash
+omarchy plugin remove shdw.github --yes
+```
+
+That disables the widget and deletes the plugin directory. If its entry is
+still in the bar layout in `~/.config/omarchy/shell.json`, delete it there too.
+
 ## What it shows
 
 - One tab per owner: **All**, **Personal**, then one tab for each organization.

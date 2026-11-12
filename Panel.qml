@@ -444,6 +444,7 @@ Panel {
             width: parent.width
             visible: root.message !== ""
             text: root.message
+            textFormat: Text.PlainText
             color: Color.urgent
             font.family: root.ff
             font.pixelSize: Style.font.caption
@@ -454,6 +455,7 @@ Panel {
             width: parent.width
             visible: root.warning !== ""
             text: root.warning
+            textFormat: Text.PlainText
             color: Qt.darker(root.fg, 1.6)
             font.family: root.ff
             font.pixelSize: Style.font.caption
@@ -580,6 +582,7 @@ Panel {
 
                     Text {
                       text: repoRow.modelData.name
+                      textFormat: Text.PlainText
                       color: root.fg
                       font.family: root.ff
                       font.pixelSize: Style.font.subtitle
@@ -606,6 +609,7 @@ Panel {
                     width: parent.width
                     visible: repoRow.modelData.description !== ""
                     text: repoRow.modelData.description
+                    textFormat: Text.PlainText
                     color: Qt.darker(root.fg, 1.45)
                     font.family: root.ff
                     font.pixelSize: Style.font.bodySmall
@@ -616,6 +620,7 @@ Panel {
                     width: parent.width
                     visible: root.cloningNwo === repoRow.modelData.nameWithOwner
                     text: "Cloning into " + root.targetPath(repoRow.modelData) + "…"
+                    textFormat: Text.PlainText
                     color: root.pendingColor
                     font.family: root.ff
                     font.pixelSize: Style.font.caption
@@ -630,6 +635,7 @@ Panel {
 
                     Text {
                       text: repoRow.modelData.owner
+                      textFormat: Text.PlainText
                       color: Qt.darker(root.fg, 1.6)
                       font.family: root.ff
                       font.pixelSize: Style.font.caption
@@ -679,6 +685,7 @@ Panel {
                     Text {
                       visible: !!repoRow.modelData.localPath
                       text: root.folderGlyph + "  " + root.shortPath(repoRow.modelData.localPath)
+                      textFormat: Text.PlainText
                       color: Qt.darker(root.fg, 1.75)
                       font.family: root.ff
                       font.pixelSize: Style.font.caption
@@ -754,6 +761,7 @@ Panel {
             visible: root.filteredRepos.length > 0
             text: root.filteredRepos.length + " shown  ·  right-click the bar icon to open "
               + root.resolvedProjectsDir
+            textFormat: Text.PlainText
             color: Qt.darker(root.fg, 1.8)
             font.family: root.ff
             font.pixelSize: Style.font.caption
