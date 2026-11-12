@@ -41,7 +41,6 @@ Panel {
 
   // Nerd Font glyphs as codepoints so editors cannot mangle the private-use
   // area.
-  readonly property string gitGlyph: String.fromCodePoint(0xE702)
   readonly property string githubGlyph: String.fromCodePoint(0xF09B)
   readonly property string downloadGlyph: String.fromCodePoint(0xF019)
   readonly property string aiGlyph: String.fromCodePoint(0xF06A9)
@@ -363,7 +362,7 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.gitGlyph
+    text: root.githubGlyph
     dimmed: root.repos.length === 0 && !root.loading
     tooltipText: root.repos.length === 0
       ? (root.loadError !== "" ? root.loadError : "GitHub repositories")
